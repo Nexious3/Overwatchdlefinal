@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Overwatchdle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Metrophobic&family=Teko:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <h1 class="title">OVERWATCHDLE</h1>
+      <p class="subtitle">Identify the secret hero. Every guess brings you closer.</p>
+    </header>
+
+    <section class="hints" aria-label="Hints">
+      <button class="hint" data-hint="quote" type="button">
+        <span class="hint-label">Quote</span>
+        <span class="hint-body">Click to reveal</span>
+      </button>
+      <button class="hint" data-hint="roleSpecies" type="button">
+        <span class="hint-label">Role / Species</span>
+        <span class="hint-body">Click to reveal</span>
+      </button>
+      <button class="hint" data-hint="origin" type="button">
+        <span class="hint-label">Origin</span>
+        <span class="hint-body">Click to reveal</span>
+      </button>
+    </section>
+
+    <section class="search">
+      <div class="search-box">
+        <input id="guess-input" type="text" placeholder="Type a hero name…" autocomplete="off"
+               role="combobox" aria-expanded="false" aria-controls="dropdown" disabled>
+        <ul id="dropdown" class="dropdown" role="listbox" hidden></ul>
+      </div>
+      <p id="status" class="status" aria-live="polite"></p>
+    </section>
+
+    <section class="board" aria-label="Guesses">
+      <div class="row row-head">
+        <div class="tile head">Hero</div>
+        <div class="tile head">Gender</div>
+        <div class="tile head">Role</div>
+        <div class="tile head">Species</div>
+        <div class="tile head">Origin</div>
+        <div class="tile head">Affiliation</div>
+        <div class="tile head">Health</div>
+        <div class="tile head">Year</div>
+      </div>
+      <div id="rows" class="rows"></div>
+    </section>
+  </main>
+  <label class="bg-picker">Change background
+    <input id="bg-input" type="file" accept="image/*" hidden>
+  </label>
+
+  <script src="script.js"></script>
+</body>
+</html>
