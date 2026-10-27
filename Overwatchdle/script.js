@@ -1,20 +1,49 @@
 (() => {
   'use strict';
 
-  const input = document.getElementById('guess-input');
-  const dropdown = document.getElementById('dropdown');
-  const rowsEl = document.getElementById('rows');
-  const statusEl = document.getElementById('status');
+  const $ = id => document.getElementById(id);
+  const input = $('guess-input');
+  const dropdown = $('dropdown');
+  const rowsEl = $('rows');
+  const statusEl = $('status');
   const hintEls = document.querySelectorAll('.hint');
+
+  const HINT_UNLOCKS = { quote: 3, roleSpecies: 5, origin: 7 }; // guesses needed per hint
+  const EPOCH = new Date(2026, 0, 1);                            // daily puzzle #1
+  const PARTIAL_FIELDS = true;                                   // yellow "close" matches
 
   let heroes = [];
   let secret = null;
+  let history = [];            // hero objects in guess order
   let guessed = new Set();
   let matches = [];
   let activeIndex = -1;
   let gameOver = false;
+  let mode = 'daily';
 
-  /* ---------- Load data ---------- */
+  /* ---------- Storage (safe if blocked) ---------- */
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } }
+  };
+  const blankStats = () => ({ won: 0, streak: 0, best: 0, last: '', dist: {} });
+
+  /* ---------- Dates & daily hero ---------- */
+  const fmt = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const todayKey = () => fmt(new Date());
+  const yesterdayKey = () => { const d = new Date(); d.setDate(d.getDate() - 1); return fmt(d); };
+  function dayNumber() {
+    const n = new Date();
+    return Math.round((new Date(n.getFullYear(), n.getMonth(), n.getDate()) - EPOCH) / 86400000) + 1;
+  }
+  function dailyHero() {
+    const list = [...heroes].sort((a, b) => a.name.localeCompare(b.name));
+    let h = 2166136261;
+    for (const ch of todayKey()) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+    return list[(h >>> 0) % list.length];
+  }
+
+  /* ---------- Load ---------- */
   async function init() {
     try {
       const res = await fetch('heroes.json');
@@ -26,16 +55,35 @@
       console.error(err);
       return;
     }
-    secret = heroes[Math.floor(Math.random() * heroes.length)];
-    refreshHints();
-    input.disabled = false;
-    input.focus();
-    setStatus('Guess a hero to begin.');
+    startGame('daily');
   }
 
-  /* ---------- Hints (unlock after a number of guesses) ---------- */
-  const HINT_UNLOCKS = { quote: 3, roleSpecies: 5, origin: 7 }; // edit these numbers
+  function startGame(m) {
+    mode = m;
+    gameOver = false;
+    history = [];
+    guessed = new Set();
+    rowsEl.innerHTML = '';
+    input.value = '';
+    closeDropdown();
+    input.disabled = false;
+    input.placeholder = 'Type a hero name…';
+    hintEls.forEach(el => el.classList.remove('revealed'));
+    $('mode-btn').textContent = m === 'daily' ? 'Random hero' : 'Daily hero';
+    secret = m === 'daily' ? dailyHero() : heroes[Math.floor(Math.random() * heroes.length)];
+    refreshHints();
+    setStatus(m === 'daily' ? 'Daily hero #' + dayNumber() + ' — make a guess.' : 'Random hero — make a guess.');
 
+    if (m === 'daily') { // restore today's progress
+      const save = store.get('owdle-save', null);
+      if (save && save.date === todayKey()) {
+        save.guesses.forEach(n => { const h = heroes.find(x => x.name === n); if (h && !gameOver) addGuess(h, true); });
+      }
+    }
+    if (!input.disabled) input.focus();
+  }
+
+  /* ---------- Hints ---------- */
   function revealHint(el) {
     if (!secret || el.classList.contains('revealed')) return;
     const type = el.dataset.hint;
@@ -63,30 +111,24 @@
     });
   }
 
-  hintEls.forEach(el => {
-    el.addEventListener('click', () => {
-      if (el.classList.contains('locked')) return;
-      revealHint(el);
-    });
-  });
+  hintEls.forEach(el => el.addEventListener('click', () => {
+    if (!el.classList.contains('locked')) revealHint(el);
+  }));
 
-  /* ---------- Custom background ---------- */
-  document.getElementById('bg-input').addEventListener('change', e => {
+  /* ---------- Background picker ---------- */
+  $('bg-input').addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
     document.documentElement.style.setProperty('--bg-image', 'url("' + URL.createObjectURL(file) + '")');
   });
 
-  /* ---------- Status ---------- */
   function setStatus(msg, cls) {
     statusEl.textContent = msg;
     statusEl.className = 'status' + (cls ? ' ' + cls : '');
   }
 
   /* ---------- Autocomplete ---------- */
-  function norm(s) {
-    return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
-  }
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 
   function updateDropdown() {
     const q = norm(input.value);
@@ -167,50 +209,99 @@
     }
   });
 
-  /* ---------- Guess handling ---------- */
+  /* ---------- Guessing ---------- */
   function submitGuess(hero) {
     if (gameOver || guessed.has(hero.name)) return;
-    guessed.add(hero.name);
-    refreshHints();
     input.value = '';
     closeDropdown();
-    addRow(hero);
+    addGuess(hero, false);
+  }
 
-    if (hero.name === secret.name) {
-      endGame(guessed.size);
-    } else {
-      setStatus('Guesses: ' + guessed.size);
+  function addGuess(hero, restoring) {
+    guessed.add(hero.name);
+    history.push(hero);
+    addRow(hero, !restoring);
+    refreshHints();
+    if (hero.name === secret.name) finish(restoring);
+    else setStatus('Guesses: ' + history.length);
+    if (mode === 'daily' && !restoring) {
+      store.set('owdle-save', { date: todayKey(), guesses: history.map(h => h.name) });
     }
   }
 
-  function endGame(count) {
+  function finish(restoring) {
     gameOver = true;
     input.disabled = true;
     input.placeholder = 'Game over';
     hintEls.forEach(revealHint);
-    // Wait for the last row's flip animation before celebrating
-    setTimeout(() => {
-      setStatus('Correct! ' + secret.name + ' in ' + count + (count === 1 ? ' guess.' : ' guesses.'), 'win');
-    }, 8 * 110 + 450);
+    const g = history;
+    const n = history.length;
+    const delay = restoring ? 0 : 8 * 110 + 450;
+    const show = () => {
+      if (history !== g) return;
+      setStatus('Correct! ' + secret.name + ' in ' + n + (n === 1 ? ' guess.' : ' guesses.'), 'win');
+    };
+    if (restoring) show(); else setTimeout(show, delay);
+    if (mode === 'daily' && !restoring) recordWin(n);
+    if (!restoring) setTimeout(() => { if (history === g) openModal(); }, delay + 900);
   }
 
-  /* ---------- Tile building ---------- */
-  function addRow(hero) {
-    const row = document.createElement('div');
-    row.className = 'row new';
+  function recordWin(n) {
+    const s = store.get('owdle-stats', blankStats());
+    if (s.last === todayKey()) return;
+    s.streak = s.last === yesterdayKey() ? s.streak + 1 : 1;
+    s.best = Math.max(s.best, s.streak);
+    s.won += 1;
+    s.last = todayKey();
+    const bucket = Math.min(n, 8);
+    s.dist[bucket] = (s.dist[bucket] || 0) + 1;
+    store.set('owdle-stats', s);
+  }
 
-    const tiles = [
+  /* ---------- Tiles ---------- */
+  const tokens = s => String(s).toLowerCase().split(/[^a-z0-9\u00e0-\u00ff]+/).filter(w => w.length > 3);
+
+  function cmp(guess, answer, partial) {
+    if (guess === answer) return { text: guess, cls: 'correct' };
+    if (partial && PARTIAL_FIELDS) {
+      const t = tokens(answer);
+      if (tokens(guess).some(w => t.includes(w))) return { text: guess, cls: 'partial' };
+    }
+    return { text: guess, cls: 'wrong' };
+  }
+
+  function cmpNum(guess, answer) {
+    if (guess === answer) return { text: String(guess), cls: 'correct' };
+    return { text: String(guess), cls: 'wrong', arrow: answer > guess ? '\u2191' : '\u2193' };
+  }
+
+  function compare(hero) {
+    return [
       { text: hero.name, cls: 'name', image: hero.image },
-      cmp(hero.gender, secret.gender),
-      cmp(hero.role, secret.role),
-      cmp(hero.species, secret.species),
-      cmp(hero.origin, secret.origin),
-      cmp(hero.affiliation, secret.affiliation),
+      cmp(hero.gender, secret.gender, false),
+      cmp(hero.role, secret.role, false),
+      cmp(hero.species, secret.species, true),
+      cmp(hero.origin, secret.origin, true),
+      cmp(hero.affiliation, secret.affiliation, true),
       cmpNum(hero.health, secret.health),
       cmpNum(hero.releaseYear ?? hero.year, secret.releaseYear ?? secret.year)
     ];
+  }
 
-    tiles.forEach((t, i) => {
+  function makeImg(src, cls) {
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = '';
+    img.loading = 'lazy';
+    img.className = cls;
+    img.addEventListener('error', () => img.remove());
+    return img;
+  }
+
+  function addRow(hero, animate) {
+    const row = document.createElement('div');
+    row.className = animate ? 'row new' : 'row';
+    compare(hero).forEach((t, i) => {
       const tile = document.createElement('div');
       tile.className = 'tile ' + t.cls;
       tile.style.setProperty('--i', i);
@@ -227,29 +318,83 @@
       }
       row.appendChild(tile);
     });
-
     rowsEl.prepend(row);
   }
 
-  function makeImg(src, cls) {
-    const img = document.createElement('img');
-    img.src = src;
-    img.alt = '';
-    img.loading = 'lazy';
-    img.className = cls;
-    img.addEventListener('error', () => img.remove());
-    return img;
+  /* ---------- Stats modal & sharing ---------- */
+  const modal = $('modal');
+
+  function renderStats() {
+    const s = store.get('owdle-stats', blankStats());
+    const live = s.last === todayKey() || s.last === yesterdayKey();
+    const total = Object.entries(s.dist).reduce((a, [k, v]) => a + Number(k) * v, 0);
+    $('st-won').textContent = s.won;
+    $('st-streak').textContent = live ? s.streak : 0;
+    $('st-best').textContent = s.best;
+    $('st-avg').textContent = s.won ? (total / s.won).toFixed(1) : '–';
+
+    const dist = $('dist');
+    dist.innerHTML = '';
+    const counts = [1, 2, 3, 4, 5, 6, 7, 8].map(n => s.dist[n] || 0);
+    const max = Math.max(1, ...counts);
+    const current = mode === 'daily' && gameOver ? Math.min(history.length, 8) : 0;
+    counts.forEach((c, i) => {
+      const line = document.createElement('div');
+      line.className = 'dist-row';
+      const label = document.createElement('span');
+      label.textContent = i === 7 ? '8+' : String(i + 1);
+      const bar = document.createElement('div');
+      bar.className = 'dist-bar' + (current === i + 1 ? ' current' : '');
+      bar.style.width = Math.max(8, (c / max) * 100) + '%';
+      bar.textContent = c;
+      line.append(label, bar);
+      dist.appendChild(line);
+    });
+
+    const ms = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 1) - new Date();
+    $('next-daily').textContent = 'Next daily hero in ' + Math.floor(ms / 3600000) + 'h ' + Math.floor(ms % 3600000 / 60000) + 'm';
+
+    const result = $('modal-result');
+    result.hidden = !gameOver;
+    if (gameOver) result.textContent = secret.name + ' \u2014 ' + history.length + (history.length === 1 ? ' guess' : ' guesses');
+    $('share-btn').hidden = !gameOver;
+    $('share-btn').textContent = 'Copy result';
   }
 
-  function cmp(guess, answer) {
-    return { text: guess, cls: guess === answer ? 'correct' : 'wrong' };
+  function openModal() {
+    if (!secret) return;
+    renderStats();
+    modal.hidden = false;
+    $('modal-close').focus();
+  }
+  function closeModal() {
+    modal.hidden = true;
+    if (!input.disabled) input.focus();
   }
 
-  function cmpNum(guess, answer) {
-    if (guess === answer) return { text: String(guess), cls: 'correct' };
-    // Arrow points toward the secret hero's value
-    return { text: String(guess), cls: 'wrong', arrow: answer > guess ? '↑' : '↓' };
+  function shareText() {
+    const rows = history.map(h => compare(h).slice(1).map(t =>
+      t.arrow ? (t.arrow === '\u2191' ? '\u2b06\ufe0f' : '\u2b07\ufe0f')
+        : t.cls === 'correct' ? '\ud83d\udfe9' : t.cls === 'partial' ? '\ud83d\udfe8' : '\ud83d\udfe5').join(''));
+    const title = mode === 'daily' ? 'Overwatchdle #' + dayNumber() : 'Overwatchdle (random)';
+    return title + ' \u2014 ' + history.length + (history.length === 1 ? ' guess' : ' guesses') + '\n\n' + rows.join('\n');
   }
+
+  $('share-btn').addEventListener('click', async () => {
+    const text = shareText();
+    try {
+      await navigator.clipboard.writeText(text);
+      $('share-btn').textContent = 'Copied!';
+    } catch {
+      window.prompt('Copy your result:', text);
+    }
+  });
+  $('stats-btn').addEventListener('click', openModal);
+  $('modal-close').addEventListener('click', closeModal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
+  $('random-btn').addEventListener('click', () => { modal.hidden = true; startGame('random'); });
+  $('mode-btn').addEventListener('click', () => startGame(mode === 'daily' ? 'random' : 'daily'));
 
   init();
 })();
