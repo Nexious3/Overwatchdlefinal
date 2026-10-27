@@ -16,6 +16,11 @@
       <p class="subtitle">Identify the secret hero. Every guess brings you closer.</p>
     </header>
 
+    <div class="toolbar">
+      <button id="stats-btn" class="btn" type="button">Stats</button>
+      <button id="mode-btn" class="btn" type="button">Random hero</button>
+    </div>
+
     <section class="hints" aria-label="Hints">
       <button class="hint" data-hint="quote" type="button">
         <span class="hint-label">Quote</span>
@@ -54,6 +59,27 @@
       <div id="rows" class="rows"></div>
     </section>
   </main>
+  <div id="modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <button id="modal-close" class="modal-close" type="button" aria-label="Close">×</button>
+      <h2 id="modal-title">Statistics</h2>
+      <p id="modal-result" class="modal-result" hidden></p>
+      <div class="stats-grid">
+        <div><b id="st-won">0</b><span>Won</span></div>
+        <div><b id="st-streak">0</b><span>Streak</span></div>
+        <div><b id="st-best">0</b><span>Best</span></div>
+        <div><b id="st-avg">–</b><span>Avg guesses</span></div>
+      </div>
+      <h3>Daily guess distribution</h3>
+      <div id="dist" class="dist"></div>
+      <div class="modal-actions">
+        <button id="share-btn" class="btn primary" type="button" hidden>Copy result</button>
+        <button id="random-btn" class="btn" type="button">Play random hero</button>
+      </div>
+      <p id="next-daily" class="next-daily"></p>
+    </div>
+  </div>
+
   <label class="bg-picker">Change background
     <input id="bg-input" type="file" accept="image/*" hidden>
   </label>
