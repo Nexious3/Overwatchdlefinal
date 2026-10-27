@@ -40,6 +40,15 @@ An internet connection is needed for the Google Fonts (Teko, Metrophobic) and fo
 3. Hints unlock as you make guesses. Click an unlocked card to reveal it.
 4. Guess correctly and the input locks and a win message shows your guess count. Reload the page for a new secret hero.
 
+## Daily mode, stats and sharing
+
+- **Daily hero:** everyone gets the same hero on the same date (based on the local date). Your guesses are saved in the browser, so a reload restores them.
+- **Random hero:** the toolbar button starts an unsaved practice game. It doesn't affect stats.
+- **Stats:** wins, streak, best streak, average guesses and a guess distribution (daily games only).
+- **Share:** after a win, "Copy result" produces an emoji grid (🟩 match, 🟨 close, 🟥 miss, ⬆️/⬇️ for Health and Year) without revealing the hero.
+- **Yellow tiles:** Species, Origin and Affiliation turn yellow when the guess shares a word with the answer (e.g. "Talon" vs "Talon (Formerly)"). Set `PARTIAL_FIELDS` to `false` in `script.js` to turn this off.
+- Saved data lives in `localStorage` (`owdle-save`, `owdle-stats`); clear site data to reset.
+
 ## Customizing
 
 **Hint unlock thresholds** (`script.js`, top of the hints section):
