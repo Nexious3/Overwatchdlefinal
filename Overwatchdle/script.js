@@ -69,10 +69,16 @@
     input.disabled = false;
     input.placeholder = 'Type a hero name…';
     hintEls.forEach(el => el.classList.remove('revealed'));
-    $('mode-btn').textContent = m === 'daily' ? 'Random hero' : 'Daily hero';
+    document.querySelectorAll('.modes .btn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+    document.body.classList.toggle('quote-mode', m === 'quote');
     secret = m === 'daily' ? dailyHero() : heroes[Math.floor(Math.random() * heroes.length)];
     refreshHints();
-    setStatus(m === 'daily' ? 'Daily hero #' + dayNumber() + ' — make a guess.' : 'Random hero — make a guess.');
+    const banner = $('quote-banner');
+    banner.hidden = m !== 'quote';
+    if (m === 'quote') banner.textContent = '\u201c' + secret.quote + '\u201d';
+    setStatus({ daily: 'Daily hero #' + dayNumber() + ' \u2014 make a guess.',
+                random: 'Random hero \u2014 make a guess.',
+                quote: 'Who said this? Make a guess.' }[m]);
 
     if (m === 'daily') { // restore today's progress
       const save = store.get('owdle-save', null);
@@ -241,7 +247,7 @@
       if (history !== g) return;
       setStatus('Correct! ' + secret.name + ' in ' + n + (n === 1 ? ' guess.' : ' guesses.'), 'win');
     };
-    if (restoring) show(); else setTimeout(show, delay);
+    if (restoring) show(); else setTimeout(() => { if (history === g) { show(); celebrate(); } }, delay);
     if (mode === 'daily' && !restoring) recordWin(n);
     if (!restoring) setTimeout(() => { if (history === g) openModal(); }, delay + 900);
   }
@@ -298,12 +304,20 @@
     return img;
   }
 
+  const LABELS = ['Hero', 'Gender', 'Role', 'Species', 'Origin', 'Affiliation', 'Health', 'Year'];
+
   function addRow(hero, animate) {
     const row = document.createElement('div');
     row.className = animate ? 'row new' : 'row';
-    compare(hero).forEach((t, i) => {
+    const res = compare(hero);
+    res.forEach((t, i) => {
       const tile = document.createElement('div');
       tile.className = 'tile ' + t.cls;
+      const tip = t.arrow ? (t.arrow === '\u2191' ? 'Secret hero is higher' : 'Secret hero is lower')
+        : { correct: 'Exact match', partial: 'Close: shares part of the answer', wrong: 'Does not match', name: t.text }[t.cls];
+      tile.dataset.label = LABELS[i];
+      tile.title = tip;
+      tile.setAttribute('aria-label', LABELS[i] + ': ' + t.text + '. ' + tip);
       tile.style.setProperty('--i', i);
       if (t.image) tile.appendChild(makeImg(t.image, 'tile-img'));
       const span = document.createElement('span');
@@ -319,6 +333,7 @@
       row.appendChild(tile);
     });
     rowsEl.prepend(row);
+    if (animate) res.forEach((t, i) => { if (i) tone(t.cls === 'correct' ? 784 : t.cls === 'partial' ? 523 : 196, i * 0.11, 0.12, 'triangle'); });
   }
 
   /* ---------- Stats modal & sharing ---------- */
@@ -376,7 +391,7 @@
     const rows = history.map(h => compare(h).slice(1).map(t =>
       t.arrow ? (t.arrow === '\u2191' ? '\u2b06\ufe0f' : '\u2b07\ufe0f')
         : t.cls === 'correct' ? '\ud83d\udfe9' : t.cls === 'partial' ? '\ud83d\udfe8' : '\ud83d\udfe5').join(''));
-    const title = mode === 'daily' ? 'Overwatchdle #' + dayNumber() : 'Overwatchdle (random)';
+    const title = mode === 'daily' ? 'Overwatchdle #' + dayNumber() : mode === 'quote' ? 'Overwatchdle (quote)' : 'Overwatchdle (random)';
     return title + ' \u2014 ' + history.length + (history.length === 1 ? ' guess' : ' guesses') + '\n\n' + rows.join('\n');
   }
 
@@ -394,7 +409,66 @@
   modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
   $('random-btn').addEventListener('click', () => { modal.hidden = true; startGame('random'); });
-  $('mode-btn').addEventListener('click', () => startGame(mode === 'daily' ? 'random' : 'daily'));
+  document.querySelectorAll('.modes .btn').forEach(b => b.addEventListener('click', () => startGame(b.dataset.mode)));
+
+  /* ---------- Sound & confetti ---------- */
+  let audioCtx = null;
+  let muted = store.get('owdle-muted', false);
+  const soundBtn = $('sound-btn');
+  const syncSound = () => {
+    soundBtn.textContent = muted ? 'Sound: Off' : 'Sound: On';
+    soundBtn.setAttribute('aria-pressed', String(!muted));
+  };
+  soundBtn.addEventListener('click', () => { muted = !muted; store.set('owdle-muted', muted); syncSound(); tone(660, 0, 0.1); });
+  syncSound();
+
+  function tone(freq, delay, dur, type, vol) {
+    if (muted) return;
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t = audioCtx.currentTime + delay;
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = type || 'sine';
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(vol || 0.06, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t); o.stop(t + dur);
+    } catch { /* audio unavailable */ }
+  }
+
+  function celebrate() {
+    [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.12, 0.3, 'triangle', 0.09));
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const cv = $('confetti');
+    const ctx = cv.getContext('2d');
+    cv.width = window.innerWidth;
+    cv.height = window.innerHeight;
+    cv.hidden = false;
+    const colors = ['#f0640e', '#1fa35c', '#ffd166', '#ffffff'];
+    const ps = Array.from({ length: 140 }, () => ({
+      x: cv.width / 2, y: cv.height * 0.35, vx: (Math.random() - 0.5) * 16, vy: -Math.random() * 14 - 4,
+      s: 6 + Math.random() * 6, c: colors[Math.floor(Math.random() * colors.length)],
+      r: Math.random() * 6.3, vr: (Math.random() - 0.5) * 0.4
+    }));
+    const t0 = performance.now();
+    (function frame(now) {
+      const age = now - t0;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ps.forEach(p => {
+        p.vy += 0.35; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+        ctx.save();
+        ctx.translate(p.x, p.y); ctx.rotate(p.r);
+        ctx.globalAlpha = Math.max(0, 1 - age / 3000);
+        ctx.fillStyle = p.c;
+        ctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2);
+        ctx.restore();
+      });
+      if (age < 3000) requestAnimationFrame(frame);
+      else { ctx.clearRect(0, 0, cv.width, cv.height); cv.hidden = true; }
+    })(t0);
+  }
 
   init();
 })();
