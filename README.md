@@ -49,6 +49,13 @@ An internet connection is needed for the Google Fonts (Teko, Metrophobic) and fo
 - **Yellow tiles:** Species, Origin and Affiliation turn yellow when the guess shares a word with the answer (e.g. "Talon" vs "Talon (Formerly)"). Set `PARTIAL_FIELDS` to `false` in `script.js` to turn this off.
 - Saved data lives in `localStorage` (`owdle-save`, `owdle-stats`); clear site data to reset.
 
+## Modes, sound and accessibility
+
+- **Modes:** Daily, Random and **Quote** (a voice line is shown and you guess who said it; the Quote hint card is hidden in this mode). Only Daily is saved and counted in stats.
+- **Sound & confetti:** tile sounds play as a row flips in, with a short fanfare and confetti on a win. Sounds are generated in the browser (no audio files). Use the Sound button to mute; the choice is remembered. Confetti is skipped if the system asks for reduced motion.
+- **Accessibility:** tiles carry symbols (✓ match, ~ close, ✗ miss) so colors aren't the only signal, hover tooltips, and screen-reader labels.
+- **Mobile:** below 700px each guess becomes a labelled card instead of a wide grid.
+
 ## Customizing
 
 **Hint unlock thresholds** (`script.js`, top of the hints section):
