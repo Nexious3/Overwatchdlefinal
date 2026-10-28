@@ -178,3 +178,37 @@ body::before {
 .dist-bar.current { background: var(--green); }
 .modal-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 20px; }
 .next-daily { margin-top: 14px; text-align: center; font-size: .85rem; color: var(--muted); }
+
+/* Modes, quote banner, legend, symbols, confetti */
+.toolbar { flex-wrap: wrap; align-items: center; }
+.modes { display: flex; gap: 6px; }
+.btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.hints { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+body.quote-mode .hint[data-hint="quote"] { display: none; }
+.quote-banner { max-width: 640px; margin: 0 auto 24px; padding: 18px 36px; text-align: center;
+  font-family: 'Teko', sans-serif; font-size: clamp(1.5rem, 4vw, 2.2rem); line-height: 1.2; color: #fff;
+  background: rgba(240,100,14,.16); box-shadow: inset 4px 0 0 var(--accent);
+  clip-path: polygon(14px 0, 100% 0, calc(100% - 14px) 100%, 0 100%); animation: pop .4s ease; }
+.quote-banner[hidden] { display: none; }
+.legend { text-align: center; font-size: .8rem; color: var(--muted); margin-bottom: 12px; }
+.tile { position: relative; }
+.tile.correct::after, .tile.partial::after, .tile.wrong::after {
+  position: absolute; top: 3px; right: 14px; font-size: .8rem; font-weight: bold; opacity: .85; }
+.tile.correct::after { content: '\2713'; }
+.tile.partial::after { content: '~'; }
+.tile.wrong::after { content: '\2717'; }
+.confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 60; }
+.confetti[hidden] { display: none; }
+
+/* Mobile: each guess becomes a card with labelled tiles */
+@media (max-width: 700px) {
+  .row-head { display: none; }
+  .row { grid-template-columns: repeat(2, 1fr); min-width: 0; padding: 8px; margin-bottom: 14px;
+    background: rgba(255,255,255,.04); border-left: 3px solid var(--accent); }
+  .tile { flex-direction: column; min-height: 62px; }
+  .tile::before { content: attr(data-label); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  .tile.name { grid-column: 1 / -1; flex-direction: row; justify-content: flex-start; gap: 12px; min-height: 60px; }
+  .tile.name::before { display: none; }
+  .tile-img { width: 48px; height: 48px; }
+  .btn { padding: 6px 16px; }
+}
